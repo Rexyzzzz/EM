@@ -1,0 +1,153 @@
+---
+title: "Untitled"
+output: pdf_document
+date: "2023-02-25"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r}
+#Q3 (a)
+knn.regression.test <- function(k,train.X,train.Y,test.X,test.Y,distances) {
+  estimates <- c()
+  n <- nrow(test.X)
+  
+  for (i in 1:n) {
+    x <- test.X[i,]
+    
+    xDataRep <- matrix(rep(x, nrow(train.X)), nrow = nrow(train.X), byrow = TRUE)
+    dist <- distances(train.X, xDataRep)
+    
+    Index <- order(dist)[1:k]
+    ys <- train.Y[Index]
+    Weight <- (1/dist[Index])/sum(1/dist[Index]) # inverse-distance weighting
+    estimates <- c(estimates, sum(ys*Weight))
+  }
+  
+  tse <- sum((test.Y - estimates)^2)
+  
+  return(list(estimates = estimates, total_square_error = tse))
+}
+
+
+```
+
+```{r}
+#(b)
+distances.l1<-function(x,y){
+  Distance <- apply(abs(x - y),1,sum)#L1 Distance
+  return(Distance)
+}
+```
+
+```{r}
+# Generate the toy 1 dataset:
+n <- 100
+set.seed(2021)
+train.X <- matrix(sort(rnorm(n)), n, 1)
+train.Y <- (train.X < -0.5) + train.X * (train.X > 0) + rnorm(n, sd = 0.03)
+test.X <- matrix(sort(rnorm(n)), n, 1)
+test.Y <- (test.X < -0.5) + test.X * (test.X > 0) + rnorm(n, sd = 0.03)
+k <- 2
+knn.regression.test(k,train.X,train.Y,test.X,test.Y,distances.l1)
+```
+```{r}
+library(ggplot2)
+k.values <- seq(1, 20, by = 1)
+tse <- sapply(k.values, function(k){
+  knn.regression.test(k, train.X, train.Y, test.X, test.Y, distances.l1)$total_square_error
+})
+
+# Create a ggplot
+ggplot(data.frame(k = k.values, tse = tse), aes(x = k, y = tse)) +
+  geom_point() +
+  labs(x = "k", y = "Total square error") +
+  ggtitle("Total square error for different values of k")
+```
+
+```{r}
+# Generate the toy 2 dataset:
+set.seed(100)
+train.X <- matrix(rnorm(200),100,2)
+train.Y <- train.X[,1]
+test.X <- matrix(rnorm(100),50,2)
+test.Y <- test.X[,1]
+k <- 3
+knn.regression.test(k,train.X,train.Y,test.X,test.Y,distances.l1)
+
+
+```
+```{r}
+library(ggplot2)
+k.values <- seq(1, 20, by = 1)
+tse <- sapply(k.values, function(k){
+  knn.regression.test(k, train.X, train.Y, test.X, test.Y, distances.l1)$total_square_error
+})
+
+# Create a ggplot
+ggplot(data.frame(k = k.values, tse = tse), aes(x = k, y = tse)) +
+  geom_point() +
+  labs(x = "k", y = "Total square error") +
+  ggtitle("Total square error for different values of k")
+```
+```{r}
+# (c)
+
+distances.l2<-function(x,y){
+  Distance <- sqrt(apply((x - y)^2,1,sum))
+  return(Distance)
+}
+install.packages("lasso2")
+library("lasso2")
+data(Iowa)
+train.X=as.matrix(Iowa[seq(1,33,2),1:9])
+train.Y=c(Iowa[seq(1,33,2),10])
+test.X=as.matrix(Iowa[seq(2,32,2),1:9])
+test.Y=c(Iowa[seq(2,32,2),10])
+k <- 5
+#Creating a tibble output of the years and prediction estimates.
+tibble(year = test.X[,1]) %>%
+  mutate(prediction = knn.regression.test(k,train.X,train.Y,test.X,test.Y,distances.l2)$estimates)
+```
+
+```{r}
+## (d)
+total_square_err <- c()
+predicts <- c()
+
+for (k in 2:20) {
+  total_square_err <- c(total_square_err,
+  knn.regression.test(k,train.X,train.Y,
+  test.X,test.Y,distances.l1)$total_square_err)
+}
+
+train.X <- train.X %>% 
+  as_tibble()
+test.X <- test.X %>% 
+  as_tibble()
+#calculating ordinary least squares error for graph
+olsr_predicted <- predict(lm(train.Y ~ ., data = train.X), newdata = test.X)
+olsr_sq_error <- sum((test.Y - ols_predicted)^2)
+
+#calculating ridge squares error for graph
+ridge_predicted <- cbind(const = 1, as.matrix(test.X)) %*% coef(lm.ridge(train.Y ~ ., data = train.X, lambda = 5)) %>%
+  as_vector()
+ridge_sq_error <- sum((test.Y - ridge_predicted)^2)
+
+#Plotting the results
+plot(2:20, total_square_err, pch = 16, xlab = "k", ylab = "Total Square Error", main = "")
+abline(h = olsr_sq_error, col = "red")
+abline(h = ridge_sq_error, col = "blue")
+
+```
+
+
+

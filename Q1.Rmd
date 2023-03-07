@@ -1,0 +1,120 @@
+---
+title: "Untitled"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+date: "2023-02-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r results='hide', message = FALSE}
+library(tidyverse)
+library(gridExtra)
+library(MASS)
+library(dplyr)
+```
+
+### bi)
+
+```{r}
+load('C:/Users/rexhu/Desktop/ST340/20newsgroups (2).rdata')
+## this function is in a seperate file
+source("em_mixture_bernoullis.R")
+```
+
+
+```{r}
+K.actual <- 4
+set.seed(55)
+#  Rdata saved to allow for easy access
+load("1b.Rdata")
+tibble(iterations = out$numit, converged = out$ll)
+```
+```{r}
+##Check if the learned parameters are close to the truth
+v1 <- sum(abs(out$mus-mus.actual))
+v2 <- sum(abs(out$mus[4:1,]-mus.actual))
+vm <- min(v1,v2)/p/4
+print(vm)
+if (vm > .5) print("probably not working") else print("might be working")
+```
+
+```{r}
+
+##Calculate the mixture parameters.
+print(system.time(em_mix_bernoulli(xs, K.actual)))
+
+```
+
+### bii)
+```{r}
+n <- 16242
+out_gammas <- out$gammas
+
+# find index of maximum value for each row
+maximum_gammas <- tibble(max_gammas = apply(out_gammas, 1, which.max), newsgroups = newsgroups)
+
+# add other columns and calculate correct matching
+output <- mutate(maximum_gammas,
+                 correct = ifelse(maximum_gammas$max_gammas == maximum_gammas$newsgroups[, 1], 1, 0),
+                 id = row_number())
+
+# create plots
+algorithm <- ggplot(output, aes(x = id, y = max_gammas, colour = factor(correct))) +
+  geom_jitter(alpha = 1) +
+  labs(x = "Document Number", y = "Cluster", title = "Clustering by algorithm", colour = "Matching")
+
+original <- ggplot(output, aes(x = id, y = newsgroups, colour = factor(correct))) +
+  geom_jitter(alpha = 1) +
+  labs(x = "Document Number", y = "Cluster", title = "Clustering by actual result", colour = "Matching")
+
+# arrange plots
+grid.arrange(algorithm, original, ncol = 2)
+
+```
+```{r}
+overall_accuracy = sum(output$correct)/n
+print(overall_accuracy)
+```
+
+
+```{r}
+recalibrated <- output %>%
+  mutate(max_gammas = case_when(
+    max_gammas == 1 ~ 3,
+    max_gammas == 4 ~ 1,
+    max_gammas == 2 ~ 4,
+    max_gammas == 3 ~ 2,
+    TRUE ~ max_gammas
+  )) %>%
+  mutate(correct = if_else(max_gammas == newsgroups[, 1], 1, 0))
+
+algo_2 <- recalibrated %>%
+  ggplot(aes(y = max_gammas, x = id, colour = factor(correct))) +
+  geom_jitter(alpha = 1) +
+  labs(x = "Document Number", y = "Cluster", title = "Clustering by algorithm", colour = "Matching")
+
+original_2 <- recalibrated %>%
+  ggplot(aes(y = newsgroups, x = id, colour = factor(correct))) +
+  geom_jitter(alpha = 1) +
+  labs(x = "Document Number", y = "Cluster", title = "Clustering by actual result", colour = "Matching")
+
+grid.arrange(algo_2, original_2, ncol = 2)
+```
+
+
+```{r}
+overall_accuracy = sum(recalibrated$correct)/n
+print(overall_accuracy)
+```
+
+

@@ -1,0 +1,203 @@
+---
+title: "Untitled"
+output: 
+  pdf_document: 
+    latex_engine: xelatex
+date: "2023-02-26"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+
+```{r}
+library(tidyverse)
+library(gridExtra)
+library(MASS)
+library(ggplot2)
+```
+
+
+```{r}
+##The code assumes that $\alpha_0 = \beta_0 = 1$ (see slide from the lecture)
+##(a)
+sample_arm.bernoulli <- function(ns, ss) {
+  alphas <- 1 + ss
+  betas <- 1 + ns - ss 
+  
+t1 <- rbeta(1, alphas[1], betas[1]) 
+t2 <- rbeta(1, alphas[2], betas[2]) 
+if (t1 > t2) {return(1)}
+else {return(2)}
+}
+
+# the ps denotes the probabilities of each arm
+thompson.bernoulli <- function(ps, n) {
+  as <- rep(0, n) #arms 
+  rs <- rep(0, n) #rewards 
+  ns <- rep(0, 2)# number of times each arm has been played
+  ss <- rep(0, 2) # and number of corresponding successes
+  
+for (i in 1:n) {
+  a <- sample_arm.bernoulli(ns,ss) 
+  r <- if_else(runif(1) < ps[a], 1, 0) 
+  ns[a] <- ns[a] + 1 
+  ss[a] <- ss[a] + r 
+  as[i] <- a 
+  rs[i] <- r 
+}
+  
+rs
+}
+```
+
+
+
+```{r}
+##define epsilon.decreasing
+epsilon.decreasing <- function(ps,n,C,t) {
+as <- rep(0, n)
+rs <- rep(0, n)
+ns <- rep(0, 2)
+ss <- rep(0, 2) 
+
+epsilon = c()
+for(i in (1:n)){
+  epsilon[i] = min(C*(1/(i^t)), 1)
+}
+# at first, play each arm once
+for (i in 1:2) { 
+  a <- i
+  r <- runif(1) < ps[a]
+  ns[a] <- ns[a] + 1
+  ss[a] <- ss[a] + r
+  as[i] <- a
+  rs[i] <- r
+}
+# For plays after n = 2, we used the epsilon strategy
+for (i in 3:n) {
+  # with probability epsilon, pick an arm uniformly at random
+  if (runif(1) < epsilon[i]) { 
+  a <- sample(2, 1)
+  # otherwise, choose the "best arm so far".
+  } else { 
+  a <- which.max(ss/ns)
+}
+r <- if_else(runif(1) < ps[a], 1, 0) # simulate the reward
+ns[a] <- ns[a] + 1 # update the number of plays
+ss[a] <- ss[a] + r # updated number of successes
+as[i] <- a #  the arm played and the reward received
+rs[i] <- r
+}
+rs
+}
+```
+
+```{r}
+ps <- c(0.6, 0.4)
+n <- 1e4
+thompson.bernoulli.out <- thompson.bernoulli(ps=ps,n)
+sum(thompson.bernoulli.out)/length(thompson.bernoulli.out)
+
+eg.out <- epsilon.decreasing(ps=ps, n, C=1, t=1)
+sum(eg.out)/length(eg.out)
+```
+
+
+
+
+```{r epsilont, warning = FALSE}
+##(b) define epsilon_test
+epsilon_test <- function(K, ps, n, C, t){
+  avg_reward <- vector(mode= "numeric", length = n)
+for(i in (1:K)){
+  avg_reward <- avg_reward + (1/K) * (cumsum(epsilon.decreasing(ps, n, C, t))/(1:n))
+}
+  tibble(avg_reward) %>%
+  mutate(n = 1:n) %>%
+  ggplot() +
+  geom_line(aes(x = n, y = avg_reward)) +
+  geom_hline(yintercept = 0.6, colour = "red") +
+  ylim(0.40, 0.7) +
+  ggtitle(paste0("Graph of C = ", C)) +
+  theme_bw()
+}
+K <- 40
+n <- 1e4
+ps <- c(0.6, 0.4)
+p1 <- epsilon_test(K, ps, n, C = 0.01, t = 1)
+p2 <- epsilon_test(K, ps, n, C = 0.1, t = 1)
+p3 <- epsilon_test(K, ps, n, C = 1, t = 1)
+p4 <- epsilon_test(K, ps, n, C = 10, t = 1)
+grid.arrange(p1, p2, p3, p4, ncol = 2)
+
+
+```
+
+
+
+```{r epsilont2}
+## (c) for Cn^(-2)
+p_1 <- epsilon_test(K, ps, n, C = 0.01, t = 2)
+p_2 <- epsilon_test(K, ps, n, C = 0.1, t = 2)
+p_3 <- epsilon_test(K, ps, n, C = 1, t = 2)
+p_4 <- epsilon_test(K, ps, n, C = 10, t = 2)
+grid.arrange(p_1, p_2, p_3, p_4, ncol = 2)
+```
+
+
+
+
+```{r}
+##(d)
+sum(eg.out)
+sum(thompson.bernoulli.out)
+```
+
+```{r}
+#Same as (b) for the epsilon method
+thompson_test <- function(K, ps, n){
+avg_reward = vector(mode = "numeric", length = n)
+for(i in (1:K)){
+  avg_reward <- avg_reward + (1/K) * (cumsum(thompson.bernoulli(ps, n))/(1:n))
+}
+
+tibble(avg_reward) %>%
+  mutate(n = 1:n) %>%
+  ggplot() +
+  geom_line(aes(x = n, y = avg_reward)) +
+  geom_hline(yintercept = 0.6, colour = "red") +
+  ggtitle("Thompson Sampling graph") +
+  theme_bw()
+}
+thompson_test(K, ps, n)
+```
+
+
+```{r}
+n <- 1e6
+epsilon_regret <- (1:n) * ps[1] - cumsum(epsilon.decreasing(ps, n, 1, 1))
+epsilon_rn <- epsilon_regret/log(1:n)
+thompson_regret <- (1:n) * ps[1] - cumsum(thompson.bernoulli(ps, n))
+thompson_rn <- thompson_regret/log(1:n)
+
+tibble(epsilon_rn, thompson_rn, n = c(1:n)) %>%
+  ggplot() +
+  geom_line(aes(x = n , y = epsilon_rn, colour = "Epsilon")) +
+  geom_line(aes(x = n , y = thompson_rn, colour = "Thompson")) +
+  theme_bw() + 
+  labs(title = "Comparison of Epsilon-Decreasing vs Thompson Regrets", y = "regret/log(n)") + 
+  scale_colour_manual(name = "Method", values = c(Epsilon = "blue", Thompson = "red")) +
+  geom_hline(yintercept = 2.466, colour = "black")
+```
+
+```
+
